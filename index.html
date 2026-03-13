@@ -1021,9 +1021,17 @@ async function openPicker(slotIdx) {
       // Show token status immediately
       list.innerHTML = '<div style="color:#aaa;font-size:11px;padding:10px 0;line-height:2;word-break:break-all">Token: ' + (accessToken ? accessToken.slice(0,30)+'...' : 'MISSING') + '<br>Fetching...</div>';
       
-      const res = await fetch('https://api.spotify.com/v1/me/playlists?limit=50', {
+      // Race fetch against a 6s timeout
+      let timedOut = false;
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => { timedOut = true; reject(new Error('Timed out after 6s')); }, 6000);
+      });
+
+      const fetchPromise = fetch('https://api.spotify.com/v1/me/playlists?limit=50', {
         headers: { 'Authorization': 'Bearer ' + accessToken }
       });
+
+      const res = await Promise.race([fetchPromise, timeoutPromise]);
       const text = await res.text();
       
       if (!res.ok) {
