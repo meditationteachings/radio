@@ -1024,30 +1024,31 @@ async function openPicker(slotIdx) {
       // Show token status immediately
       list.innerHTML = '<div style="color:#aaa;font-size:11px;padding:10px 0;line-height:2;word-break:break-all">Token: ' + (accessToken ? accessToken.slice(0,30)+'...' : 'MISSING') + '<br>Fetching...</div>';
       
-      // Race fetch against a 6s timeout
-      let timedOut = false;
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => { timedOut = true; reject(new Error('Timed out after 6s')); }, 6000);
+      // Use XMLHttpRequest for better Safari iOS compatibility
+      const token = accessToken;
+      const xhrResult = await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('GET', 'https://api.spotify.com/v1/me/playlists?limit=50');
+        xhr.setRequestHeader('Authorization', 'Bearer ' + token);
+        xhr.timeout = 10000;
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try { resolve(JSON.parse(xhr.responseText)); }
+            catch(e) { reject(new Error('Parse error: ' + xhr.responseText.slice(0,100))); }
+          } else {
+            reject(new Error('HTTP ' + xhr.status + ': ' + xhr.responseText.slice(0, 200)));
+          }
+        };
+        xhr.onerror = () => reject(new Error('Network error (XHR)'));
+        xhr.ontimeout = () => reject(new Error('Timed out after 10s (XHR)'));
+        xhr.send();
       });
 
-      const fetchPromise = fetch('https://api.spotify.com/v1/me/playlists?limit=50', {
-        headers: { 'Authorization': 'Bearer ' + accessToken }
-      });
-
-      const res = await Promise.race([fetchPromise, timeoutPromise]);
-      const text = await res.text();
-      
-      if (!res.ok) {
-        list.innerHTML = '<div style="color:#f66;font-size:11px;padding:10px 0;line-height:1.8;word-break:break-all">Status: ' + res.status + '<br><br>' + text.slice(0, 300) + '</div>';
+      if (!xhrResult.items || xhrResult.items.length === 0) {
+        list.innerHTML = '<div style="color:#f66;font-size:11px;padding:10px 0">No playlists found.<br>Raw: ' + JSON.stringify(xhrResult).slice(0,200) + '</div>';
         return;
       }
-      
-      const data = JSON.parse(text);
-      if (!data.items || data.items.length === 0) {
-        list.innerHTML = '<div style="color:#f66;font-size:11px;padding:10px 0">No playlists found.<br><br>Raw: ' + text.slice(0,200) + '</div>';
-        return;
-      }
-      userPlaylists = data.items;
+      userPlaylists = xhrResult.items;
     } catch(e) {
       list.innerHTML = '<div style="color:#f66;font-size:11px;padding:10px 0;word-break:break-all">Exception: ' + e.message + '<br><br>Token: ' + (accessToken ? accessToken.slice(0,30)+'...' : 'MISSING') + '</div>';
       return;
