@@ -697,12 +697,21 @@ async function playPlaylist(uri) {
 
 async function fetchUserPlaylists() {
   try {
-    const data = await spotifyFetch('/me/playlists?limit=50');
-    console.log('Playlists response:', JSON.stringify(data).slice(0, 200));
+    // 8 second timeout
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    const res = await fetch('https://api.spotify.com/v1/me/playlists?limit=50', {
+      headers: { 'Authorization': 'Bearer ' + accessToken },
+      signal: controller.signal
+    });
+    clearTimeout(timeout);
+    const text = await res.text();
+    if (!res.ok) throw new Error('HTTP ' + res.status + ': ' + text.slice(0, 100));
+    const data = JSON.parse(text);
     return data.items || [];
   } catch(e) {
     console.error('fetchUserPlaylists error:', e.message);
-    throw e;
+    throw new Error(e.message || 'Unknown error');
   }
 }
 
@@ -1009,9 +1018,27 @@ async function openPicker(slotIdx) {
 
   if (!userPlaylists.length) {
     try {
-      userPlaylists = await fetchUserPlaylists();
+      // Show token status immediately
+      list.innerHTML = '<div style="color:#aaa;font-size:11px;padding:10px 0;line-height:2;word-break:break-all">Token: ' + (accessToken ? accessToken.slice(0,30)+'...' : 'MISSING') + '<br>Fetching...</div>';
+      
+      const res = await fetch('https://api.spotify.com/v1/me/playlists?limit=50', {
+        headers: { 'Authorization': 'Bearer ' + accessToken }
+      });
+      const text = await res.text();
+      
+      if (!res.ok) {
+        list.innerHTML = '<div style="color:#f66;font-size:11px;padding:10px 0;line-height:1.8;word-break:break-all">Status: ' + res.status + '<br><br>' + text.slice(0, 300) + '</div>';
+        return;
+      }
+      
+      const data = JSON.parse(text);
+      if (!data.items || data.items.length === 0) {
+        list.innerHTML = '<div style="color:#f66;font-size:11px;padding:10px 0">No playlists found.<br><br>Raw: ' + text.slice(0,200) + '</div>';
+        return;
+      }
+      userPlaylists = data.items;
     } catch(e) {
-      list.innerHTML = '<div style="color:#f66;font-size:13px;padding:20px 0;line-height:1.8">Error: ' + e.message + '<br><br>Token: ' + (accessToken ? accessToken.slice(0,20)+'...' : 'MISSING') + '</div>';
+      list.innerHTML = '<div style="color:#f66;font-size:11px;padding:10px 0;word-break:break-all">Exception: ' + e.message + '<br><br>Token: ' + (accessToken ? accessToken.slice(0,30)+'...' : 'MISSING') + '</div>';
       return;
     }
   }
