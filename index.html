@@ -584,7 +584,7 @@
 
 <!-- PLAYLIST PICKER -->
 <div class="playlist-picker" id="playlist-picker">
-  <div class="picker-title">SELECT PLAYLIST v5</div>
+  <div class="picker-title">SELECT PLAYLIST v6</div>
   <div id="picker-list"></div>
   <button class="picker-close" onclick="closePicker()">CANCEL</button>
 </div>
@@ -734,39 +734,30 @@ async function fetchCurrentlyPlaying() {
 }
 
 // ════════════════════════════════════════════════
-// WEB PLAYBACK SDK
+// MOBILE-FIRST: No SDK, use Web API + Spotify app
 // ════════════════════════════════════════════════
-function initPlayer() {
-  player = new Spotify.Player({
-    name: 'RADIO Car Mode',
-    getOAuthToken: cb => cb(accessToken),
-    volume: 0.8
-  });
+async function initPlayer() {
+  // Get available devices — user must have Spotify open
+  await getActiveDevice();
+  showRadio();
+}
 
-  player.addListener('ready', ({ device_id }) => {
-    deviceId = device_id;
-    showRadio();
-  });
-
-  player.addListener('player_state_changed', state => {
-    if (!state) return;
-    isPlaying = !state.paused;
-    document.getElementById('play-pause-btn').textContent = isPlaying ? '⏸' : '▶';
-    const track = state.track_window?.current_track;
-    if (track) {
-      currentTrackInfo = {
-        name: track.name,
-        artist: track.artists.map(a => a.name).join(', '),
-        art: track.album.images[0]?.url || ''
-      };
-      updateNowPlaying();
+async function getActiveDevice() {
+  try {
+    const data = await spotifyFetch('/me/player/devices');
+    if (data && data.devices && data.devices.length > 0) {
+      // Prefer phone/mobile device, fallback to first active
+      const mobile = data.devices.find(d => d.type === 'Smartphone');
+      const active = data.devices.find(d => d.is_active);
+      const chosen = active || mobile || data.devices[0];
+      deviceId = chosen.id;
+      isPlaying = chosen.is_active && !chosen.is_restricted;
+      document.getElementById('play-pause-btn').textContent = isPlaying ? '⏸' : '▶';
     }
-  });
-
-  player.addListener('initialization_error', ({ message }) => showError('Init error: ' + message));
-  player.addListener('authentication_error', ({ message }) => showError('Auth error: ' + message));
-  player.addListener('account_error', () => showError('Spotify Premium required'));
-  player.connect();
+  } catch(e) {
+    // No device found — that's OK, we'll try when playing
+    console.log('No device yet:', e.message);
+  }
 }
 
 // ════════════════════════════════════════════════
@@ -977,8 +968,19 @@ function updateNowPlaying() {
 }
 
 async function togglePlayPause() {
-  if (!player) return;
-  await player.togglePlay();
+  try {
+    if (isPlaying) {
+      await spotifyFetch('/me/player/pause', { method: 'PUT' });
+      isPlaying = false;
+      document.getElementById('play-pause-btn').textContent = '▶';
+    } else {
+      await spotifyFetch('/me/player/play', { method: 'PUT' });
+      isPlaying = true;
+      document.getElementById('play-pause-btn').textContent = '⏸';
+    }
+  } catch(e) {
+    showError('Open Spotify app first');
+  }
 }
 
 // ════════════════════════════════════════════════
@@ -1110,7 +1112,7 @@ function showError(msg) {
 // ════════════════════════════════════════════════
 // INIT
 // ════════════════════════════════════════════════
-window.onSpotifyWebPlaybackSDKReady = initPlayer;
+// No SDK needed for mobile API approach
 
 async function init() {
   // Check for auth callback
@@ -1157,29 +1159,8 @@ function logout() {
 }
 
 function loadSDK() {
-  if (window.Spotify) { initPlayer(); return; }
-  
-  // Timeout if SDK never loads
-  const sdkTimeout = setTimeout(() => {
-    document.querySelector('.loading-text').textContent = 'SDK failed to load. Check connection.';
-    document.querySelector('.loading-text').style.color = '#f66';
-    // Show manual retry button
-    const btn = document.createElement('button');
-    btn.textContent = 'RETRY';
-    btn.style.cssText = 'margin-top:20px;background:transparent;border:1px solid #ff8c00;color:#ff8c00;font-family:Orbitron,monospace;font-size:12px;letter-spacing:0.2em;padding:12px 24px;cursor:pointer';
-    btn.onclick = () => { localStorage.removeItem('spotify_token'); location.reload(); };
-    document.getElementById('loading-screen').appendChild(btn);
-  }, 8000);
-
-  const script = document.createElement('script');
-  script.src = 'https://sdk.scdn.co/spotify-player.js';
-  script.onload = () => clearTimeout(sdkTimeout);
-  script.onerror = () => {
-    clearTimeout(sdkTimeout);
-    document.querySelector('.loading-text').textContent = 'Failed to load Spotify SDK';
-    document.querySelector('.loading-text').style.color = '#f66';
-  };
-  document.head.appendChild(script);
+  // No SDK needed for mobile — go straight to radio
+  initPlayer();
 }
 
 init();
