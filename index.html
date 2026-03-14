@@ -584,7 +584,7 @@
 
 <!-- PLAYLIST PICKER -->
 <div class="playlist-picker" id="playlist-picker">
-  <div class="picker-title">SELECT PLAYLIST v6</div>
+  <div class="picker-title">SELECT PLAYLIST v7</div>
   <div id="picker-list"></div>
   <button class="picker-close" onclick="closePicker()">CANCEL</button>
 </div>
@@ -611,7 +611,16 @@ const SCOPES = [
 let accessToken = null;
 let player = null;
 let deviceId = null;
-let stations = JSON.parse(localStorage.getItem('radio_stations') || 'null') || Array(8).fill(null);
+let stations = JSON.parse(localStorage.getItem('radio_stations') || 'null') || [
+  { name: 'Favorites', uri: 'spotify:playlist:7z9fIn3nbQ30xpWQnRgbaC', image: '' },
+  { name: 'Wilmy',     uri: 'spotify:playlist:1sTHxWf7DzXzu94VnaVVvf', image: '' },
+  { name: 'Appalachian', uri: 'spotify:playlist:3hQ1RLnsnbMO8nJO4g7w7Q', image: '' },
+  { name: 'Blonde',    uri: 'spotify:album:3mH6qwIy9crq0I9YQbOuDf',   image: '' },
+  { name: '2093',      uri: 'spotify:album:7aUeYDjGYo8wMKcpeGFRbg',   image: '' },
+  { name: 'Classical', uri: 'spotify:playlist:27Zm1P410dPfedsdoO9fqm', image: '' },
+  { name: 'Tetragram', uri: 'spotify:show:6ZVBi4NU0OmUT8fPomahis',    image: '' },
+  { name: 'Beatles',   uri: 'spotify:playlist:0VMglJwbaEOLtlt6tAGGXG', image: '' }
+];
 let currentStationIdx = -1;
 let isPlaying = false;
 let previewTimer = null;
