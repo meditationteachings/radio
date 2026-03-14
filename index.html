@@ -572,9 +572,14 @@
     <div id="bottom-controls" style="
       display:flex; gap:24px; align-items:center; justify-content:center;
       padding: 12px 0 8px;
+      position:relative; z-index:20;
     ">
-      <button class="ctrl-btn" id="play-pause-btn" onclick="togglePlayPause()">▶</button>
-      <button class="ctrl-btn" id="next-btn" onclick="nextTrack()">⏭</button>
+      <button class="ctrl-btn" id="play-pause-btn"
+        ontouchend="event.stopPropagation();event.preventDefault();togglePlayPause();"
+        onclick="togglePlayPause()">▶</button>
+      <button class="ctrl-btn" id="next-btn"
+        ontouchend="event.stopPropagation();event.preventDefault();nextTrack();"
+        onclick="nextTrack()">⏭</button>
     </div>
     <div id="hint">Drag to tune · Release to play</div>
   </div>
