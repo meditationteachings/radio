@@ -584,7 +584,7 @@
 
 <!-- PLAYLIST PICKER -->
 <div class="playlist-picker" id="playlist-picker">
-  <div class="picker-title">SELECT PLAYLIST v4</div>
+  <div class="picker-title">SELECT PLAYLIST v5</div>
   <div id="picker-list"></div>
   <button class="picker-close" onclick="closePicker()">CANCEL</button>
 </div>
@@ -1158,8 +1158,27 @@ function logout() {
 
 function loadSDK() {
   if (window.Spotify) { initPlayer(); return; }
+  
+  // Timeout if SDK never loads
+  const sdkTimeout = setTimeout(() => {
+    document.querySelector('.loading-text').textContent = 'SDK failed to load. Check connection.';
+    document.querySelector('.loading-text').style.color = '#f66';
+    // Show manual retry button
+    const btn = document.createElement('button');
+    btn.textContent = 'RETRY';
+    btn.style.cssText = 'margin-top:20px;background:transparent;border:1px solid #ff8c00;color:#ff8c00;font-family:Orbitron,monospace;font-size:12px;letter-spacing:0.2em;padding:12px 24px;cursor:pointer';
+    btn.onclick = () => { localStorage.removeItem('spotify_token'); location.reload(); };
+    document.getElementById('loading-screen').appendChild(btn);
+  }, 8000);
+
   const script = document.createElement('script');
   script.src = 'https://sdk.scdn.co/spotify-player.js';
+  script.onload = () => clearTimeout(sdkTimeout);
+  script.onerror = () => {
+    clearTimeout(sdkTimeout);
+    document.querySelector('.loading-text').textContent = 'Failed to load Spotify SDK';
+    document.querySelector('.loading-text').style.color = '#f66';
+  };
   document.head.appendChild(script);
 }
 
