@@ -178,19 +178,20 @@
       margin-top: 2px;
     }
 
-    #play-pause-btn {
-      width: 40px; height: 40px;
+    .ctrl-btn {
+      width: 48px; height: 48px;
       border: 1.5px solid var(--amber-dim);
       background: transparent;
       color: var(--amber);
-      font-size: 16px;
+      font-size: 18px;
       cursor: pointer;
       display: flex; align-items: center; justify-content: center;
       transition: all 0.2s;
       flex-shrink: 0;
+      -webkit-tap-highlight-color: rgba(255,140,0,0.2);
     }
 
-    #play-pause-btn:active { background: var(--amber-glow); }
+    .ctrl-btn:active { background: var(--amber-glow); }
 
     /* Wheel container */
     #wheel-container {
@@ -547,7 +548,7 @@
         <div id="now-playing-name">—</div>
         <div id="now-playing-track">Select a station</div>
       </div>
-      <button id="play-pause-btn" onclick="togglePlayPause()">▶</button>
+
     </div>
 
     <!-- Settings btn -->
@@ -567,6 +568,14 @@
       <!-- Station nodes injected by JS -->
     </div>
 
+    <!-- Bottom controls -->
+    <div id="bottom-controls" style="
+      display:flex; gap:24px; align-items:center; justify-content:center;
+      padding: 12px 0 8px;
+    ">
+      <button class="ctrl-btn" id="play-pause-btn" onclick="togglePlayPause()">▶</button>
+      <button class="ctrl-btn" id="next-btn" onclick="nextTrack()">⏭</button>
+    </div>
     <div id="hint">Drag to tune · Release to play</div>
   </div>
 
@@ -584,7 +593,7 @@
 
 <!-- PLAYLIST PICKER -->
 <div class="playlist-picker" id="playlist-picker">
-  <div class="picker-title">SELECT PLAYLIST v7</div>
+  <div class="picker-title">SELECT PLAYLIST v11</div>
   <div id="picker-list"></div>
   <button class="picker-close" onclick="closePicker()">CANCEL</button>
 </div>
@@ -674,7 +683,41 @@ async function exchangeCode(code) {
       code_verifier: verifier
     })
   });
-  return res.json();
+  const data = await res.json();
+  // Store refresh token for silent renewal
+  if (data.refresh_token) {
+    localStorage.setItem('spotify_refresh_token', data.refresh_token);
+  }
+  return data;
+}
+
+async function refreshAccessToken() {
+  const refreshToken = localStorage.getItem('spotify_refresh_token');
+  if (!refreshToken) throw new Error('No refresh token');
+  const res = await fetch('https://accounts.spotify.com/api/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+      client_id: CLIENT_ID
+    })
+  });
+  const data = await res.json();
+  if (data.access_token) {
+    accessToken = data.access_token;
+    localStorage.setItem('spotify_token', accessToken);
+    if (data.refresh_token) localStorage.setItem('spotify_refresh_token', data.refresh_token);
+    return true;
+  }
+  return false;
+}
+
+// Auto-refresh token every 45 minutes
+function startTokenRefresh() {
+  setInterval(async () => {
+    try { await refreshAccessToken(); } catch(e) { console.log('Token refresh failed:', e.message); }
+  }, 45 * 60 * 1000);
 }
 
 // ════════════════════════════════════════════════
@@ -691,7 +734,22 @@ async function spotifyFetch(path, options = {}) {
   });
   if (res.status === 204) return null;
   if (res.status === 401) {
+    // Try silent refresh first
+    try {
+      const refreshed = await refreshAccessToken();
+      if (refreshed) {
+        // Retry the request with new token
+        const retry = await fetch(`https://api.spotify.com/v1${path}`, {
+          ...options,
+          headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json', ...(options.headers || {}) }
+        });
+        if (retry.status === 204) return null;
+        if (retry.ok) return retry.json();
+      }
+    } catch(e) {}
+    // If refresh failed, redirect to login
     localStorage.removeItem('spotify_token');
+    localStorage.removeItem('spotify_refresh_token');
     showError('Session expired — reconnecting...');
     setTimeout(() => startAuth(), 1500);
     throw new Error('Token expired');
@@ -902,15 +960,23 @@ function setPlayingStation(idx) {
 }
 
 async function playStation(idx, isPreview = false) {
-  if (!stations[idx] || !deviceId) return;
+  if (!stations[idx]) return;
   try {
-    await playPlaylist(stations[idx].uri);
+    // Get fresh device if needed
+    if (!deviceId) await getActiveDevice();
+    const uri = stations[idx].uri;
+    const isShow = uri.startsWith('spotify:show');
+    // Enable shuffle first (not for podcasts)
+    if (!isShow) {
+      try { await spotifyFetch('/me/player/shuffle?state=true' + (deviceId ? '&device_id=' + deviceId : ''), { method: 'PUT' }); } catch(e) {}
+    }
+    await playPlaylist(uri);
     if (!isPreview) setPlayingStation(idx);
     isPlaying = true;
     document.getElementById('play-pause-btn').textContent = '⏸';
     document.getElementById('hint').style.opacity = '0';
   } catch(e) {
-    showError('Playback failed');
+    showError('Open Spotify app first');
   }
 }
 
@@ -978,7 +1044,10 @@ function updateNowPlaying() {
 
 async function togglePlayPause() {
   try {
-    if (isPlaying) {
+    // Always check real state first
+    const state = await spotifyFetch('/me/player');
+    const playing = state && state.is_playing;
+    if (playing) {
       await spotifyFetch('/me/player/pause', { method: 'PUT' });
       isPlaying = false;
       document.getElementById('play-pause-btn').textContent = '▶';
@@ -987,6 +1056,16 @@ async function togglePlayPause() {
       isPlaying = true;
       document.getElementById('play-pause-btn').textContent = '⏸';
     }
+  } catch(e) {
+    showError('Open Spotify app first');
+  }
+}
+
+async function nextTrack() {
+  try {
+    await spotifyFetch('/me/player/next', { method: 'POST' });
+    // Update now playing after short delay
+    setTimeout(fetchCurrentlyPlaying, 800);
   } catch(e) {
     showError('Open Spotify app first');
   }
@@ -1107,8 +1186,8 @@ function showRadio() {
   showScreen('radio-screen');
   wheelNodes = buildWheel();
   setupTouchHandlers();
-  // Poll now playing every 5s
   setInterval(fetchCurrentlyPlaying, 5000);
+  startTokenRefresh();
 }
 
 function showError(msg) {
