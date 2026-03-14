@@ -249,10 +249,12 @@
 
     #center-number {
       font-family: 'Orbitron', monospace;
-      font-size: 22px; font-weight: 900;
+      font-size: 13px; font-weight: 900;
       color: var(--white);
       line-height: 1;
       margin-top: 2px;
+      text-align: center;
+      word-break: break-word;
     }
 
     /* Station nodes */
@@ -937,8 +939,9 @@ function setActiveStation(idx) {
   const node = document.getElementById(`station-${idx}`);
   if (node) node.classList.add('active');
 
-  document.getElementById('center-number').textContent = STATION_LABELS[idx];
-  document.getElementById('center-label').textContent = 'FM';
+  const stationName = stations[idx]?.name || `SLOT ${idx+1}`;
+  document.getElementById('center-number').textContent = stationName.slice(0, 8);
+  document.getElementById('center-label').textContent = '▶';
 
   // Preview after 1.5s
   if (stations[idx]) {
@@ -981,7 +984,7 @@ async function playStation(idx, isPreview = false) {
     document.getElementById('play-pause-btn').textContent = '⏸';
     document.getElementById('hint').style.opacity = '0';
   } catch(e) {
-    showError('Open Spotify app first');
+    // silenced
   }
 }
 
@@ -1062,7 +1065,7 @@ async function togglePlayPause() {
       document.getElementById('play-pause-btn').textContent = '⏸';
     }
   } catch(e) {
-    showError('Open Spotify app first');
+    // silenced
   }
 }
 
@@ -1072,7 +1075,7 @@ async function nextTrack() {
     // Update now playing after short delay
     setTimeout(fetchCurrentlyPlaying, 800);
   } catch(e) {
-    showError('Open Spotify app first');
+    // silenced
   }
 }
 
