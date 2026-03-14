@@ -2,7 +2,7 @@
   "name": "RADIO",
   "short_name": "RADIO",
   "description": "GTA-style Spotify radio for your car",
-  "start_url": "/",
+  "start_url": "/radio/",
   "display": "fullscreen",
   "orientation": "portrait",
   "background_color": "#0a0a0a",
