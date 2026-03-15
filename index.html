@@ -1263,19 +1263,23 @@ async function init() {
   if (code) {
     showScreen('loading-screen');
     window.history.replaceState({}, '', window.location.pathname);
+    // Safety timeout — if exchange hangs, go to auth screen
+    const safetyTimer = setTimeout(() => {
+      localStorage.removeItem('spotify_token');
+      showScreen('auth-screen');
+    }, 8000);
     try {
       const tokens = await exchangeCode(code);
+      clearTimeout(safetyTimer);
       if (tokens.access_token) {
         accessToken = tokens.access_token;
         localStorage.setItem('spotify_token', accessToken);
-        // Load SDK
         loadSDK();
       } else {
-        showError('Auth failed');
         showScreen('auth-screen');
       }
     } catch(e) {
-      showError('Auth error');
+      clearTimeout(safetyTimer);
       showScreen('auth-screen');
     }
     return;
@@ -1286,6 +1290,12 @@ async function init() {
   if (stored) {
     accessToken = stored;
     showScreen('loading-screen');
+    // Safety timeout — if loadSDK hangs, go to auth screen
+    const loadTimer = setTimeout(() => {
+      localStorage.removeItem('spotify_token');
+      showScreen('auth-screen');
+    }, 8000);
+    window._loadTimer = loadTimer;
     loadSDK();
     return;
   }
