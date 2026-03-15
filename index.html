@@ -832,8 +832,7 @@ async function fetchCurrentlyPlaying() {
 // MOBILE-FIRST: No SDK, use Web API + Spotify app
 // ════════════════════════════════════════════════
 async function initPlayer() {
-  // Get available devices — user must have Spotify open
-  await getActiveDevice();
+  // Go straight to radio — get device lazily when needed
   showRadio();
 }
 
