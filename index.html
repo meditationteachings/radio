@@ -683,23 +683,34 @@ async function startAuth() {
 
 async function exchangeCode(code) {
   const verifier = sessionStorage.getItem('pkce_verifier');
-  const res = await fetch('https://accounts.spotify.com/api/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'authorization_code',
-      code,
-      redirect_uri: REDIRECT_URI,
-      client_id: CLIENT_ID,
-      code_verifier: verifier
-    })
-  });
-  const data = await res.json();
-  // Store refresh token for silent renewal
-  if (data.refresh_token) {
-    localStorage.setItem('spotify_refresh_token', data.refresh_token);
+  
+  // Add 10s timeout to token exchange
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000);
+  
+  try {
+    const res = await fetch('https://accounts.spotify.com/api/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: REDIRECT_URI,
+        client_id: CLIENT_ID,
+        code_verifier: verifier
+      }),
+      signal: controller.signal
+    });
+    clearTimeout(timeout);
+    const data = await res.json();
+    if (data.refresh_token) {
+      localStorage.setItem('spotify_refresh_token', data.refresh_token);
+    }
+    return data;
+  } catch(e) {
+    clearTimeout(timeout);
+    throw new Error('Token exchange failed: ' + e.message);
   }
-  return data;
 }
 
 async function refreshAccessToken() {
@@ -846,7 +857,7 @@ async function getActiveDevice() {
       const chosen = active || mobile || data.devices[0];
       deviceId = chosen.id;
       isPlaying = chosen.is_active && !chosen.is_restricted;
-      document.getElementById('play-pause-btn').textContent = isPlaying ? '⏸' : '▶';
+      document.getElementById('play-icon').style.display = isPlaying ? 'none' : 'block'; document.getElementById('pause-icon').style.display = isPlaying ? 'block' : 'none';
     }
   } catch(e) {
     // No device found — that's OK, we'll try when playing
@@ -1001,7 +1012,7 @@ async function playStation(idx, isPreview = false) {
     await playPlaylist(uri);
     if (!isPreview) setPlayingStation(idx);
     isPlaying = true;
-    document.getElementById('play-pause-btn').textContent = '⏸';
+    document.getElementById('play-icon').style.display = 'none'; document.getElementById('pause-icon').style.display = 'block';
     document.getElementById('hint').style.opacity = '0';
     if (!isPreview) {
       autoSkipIfSilent();
@@ -1083,11 +1094,11 @@ async function togglePlayPause() {
     if (playing) {
       await spotifyFetch('/me/player/pause', { method: 'PUT' });
       isPlaying = false;
-      document.getElementById('play-pause-btn').textContent = '▶';
+      document.getElementById('play-icon').style.display = 'block'; document.getElementById('pause-icon').style.display = 'none';
     } else {
       await spotifyFetch('/me/player/play', { method: 'PUT' });
       isPlaying = true;
-      document.getElementById('play-pause-btn').textContent = '⏸';
+      document.getElementById('play-icon').style.display = 'none'; document.getElementById('pause-icon').style.display = 'block';
     }
   } catch(e) {
     // silenced
@@ -1224,7 +1235,7 @@ function showScreen(id) {
 }
 
 function showRadio() {
-  document.getElementById('play-pause-btn').textContent = '▶';
+  document.getElementById('play-icon').style.display = 'block'; document.getElementById('pause-icon').style.display = 'none';
   showScreen('radio-screen');
   wheelNodes = buildWheel();
   setupTouchHandlers();
