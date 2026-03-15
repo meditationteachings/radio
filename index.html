@@ -998,6 +998,12 @@ function setPlayingStation(idx) {
 async function playStation(idx, isPreview = false) {
   if (!stations[idx]) return;
   try {
+    // Immediately show station name in now playing bar
+    if (!isPreview) {
+      document.getElementById('now-playing-name').textContent = stations[idx].name;
+      document.getElementById('now-playing-track').textContent = 'Loading...';
+      if (stations[idx].image) document.getElementById('now-playing-art').src = stations[idx].image;
+    }
     // Get fresh device if needed
     if (!deviceId) await getActiveDevice();
     const uri = stations[idx].uri;
@@ -1011,7 +1017,11 @@ async function playStation(idx, isPreview = false) {
     isPlaying = true;
     document.getElementById('play-pause-btn').textContent = '⏸';
     document.getElementById('hint').style.opacity = '0';
-    if (!isPreview) autoSkipIfSilent();
+    if (!isPreview) {
+      autoSkipIfSilent();
+      const delay = isShow ? 3000 : 1500;
+      setTimeout(fetchCurrentlyPlaying, delay);
+    }
   } catch(e) {
     // silenced
   }
