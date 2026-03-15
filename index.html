@@ -1285,18 +1285,28 @@ async function init() {
     return;
   }
 
-  // Check stored token
+  // Check stored token — try refresh first, go straight to radio
   const stored = localStorage.getItem('spotify_token');
-  if (stored) {
-    accessToken = stored;
+  const storedRefresh = localStorage.getItem('spotify_refresh_token');
+  if (stored || storedRefresh) {
     showScreen('loading-screen');
-    // Safety timeout — if loadSDK hangs, go to auth screen
-    const loadTimer = setTimeout(() => {
-      localStorage.removeItem('spotify_token');
-      showScreen('auth-screen');
-    }, 8000);
-    window._loadTimer = loadTimer;
-    loadSDK();
+    try {
+      // Try to refresh the token silently
+      if (storedRefresh) {
+        const refreshed = await refreshAccessToken();
+        if (refreshed) { loadSDK(); return; }
+      }
+      // Fall back to stored token
+      if (stored) {
+        accessToken = stored;
+        loadSDK();
+        return;
+      }
+    } catch(e) {}
+    // If all fails, clear and show auth
+    localStorage.removeItem('spotify_token');
+    localStorage.removeItem('spotify_refresh_token');
+    showScreen('auth-screen');
     return;
   }
 
