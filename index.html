@@ -857,7 +857,7 @@ async function getActiveDevice() {
       const chosen = active || mobile || data.devices[0];
       deviceId = chosen.id;
       isPlaying = chosen.is_active && !chosen.is_restricted;
-      document.getElementById('play-icon').style.display = isPlaying ? 'none' : 'block'; document.getElementById('pause-icon').style.display = isPlaying ? 'block' : 'none';
+      document.getElementById('play-pause-btn').textContent = isPlaying ? '⏸' : '▶';
     }
   } catch(e) {
     // No device found — that's OK, we'll try when playing
@@ -1012,7 +1012,7 @@ async function playStation(idx, isPreview = false) {
     await playPlaylist(uri);
     if (!isPreview) setPlayingStation(idx);
     isPlaying = true;
-    document.getElementById('play-icon').style.display = 'none'; document.getElementById('pause-icon').style.display = 'block';
+    document.getElementById('play-pause-btn').textContent = '⏸';
     document.getElementById('hint').style.opacity = '0';
     if (!isPreview) {
       autoSkipIfSilent();
@@ -1094,11 +1094,11 @@ async function togglePlayPause() {
     if (playing) {
       await spotifyFetch('/me/player/pause', { method: 'PUT' });
       isPlaying = false;
-      document.getElementById('play-icon').style.display = 'block'; document.getElementById('pause-icon').style.display = 'none';
+      document.getElementById('play-pause-btn').textContent = '▶';
     } else {
       await spotifyFetch('/me/player/play', { method: 'PUT' });
       isPlaying = true;
-      document.getElementById('play-icon').style.display = 'none'; document.getElementById('pause-icon').style.display = 'block';
+      document.getElementById('play-pause-btn').textContent = '⏸';
     }
   } catch(e) {
     // silenced
@@ -1235,7 +1235,8 @@ function showScreen(id) {
 }
 
 function showRadio() {
-  document.getElementById('play-icon').style.display = 'block'; document.getElementById('pause-icon').style.display = 'none';
+  const btn = document.getElementById('play-pause-btn');
+  if (btn) btn.textContent = '▶';
   showScreen('radio-screen');
   wheelNodes = buildWheel();
   setupTouchHandlers();
@@ -1283,7 +1284,7 @@ async function init() {
         accessToken = tokens.access_token;
         localStorage.setItem('spotify_token', accessToken);
         if (tokens.refresh_token) localStorage.setItem('spotify_refresh_token', tokens.refresh_token);
-        loadSDK();
+        showRadio();
       } else {
         showScreen('auth-screen');
       }
