@@ -781,12 +781,24 @@ async function spotifyFetch(path, options = {}) {
 
 async function playPlaylist(uri) {
   const randomOffset = Math.floor(Math.random() * 10);
-  
-  // Get fresh device every time
+
+  // Get fresh device list
   await getActiveDevice();
-  
+
+  // If we have a device, transfer playback to wake it up
+  if (deviceId) {
+    try {
+      await spotifyFetch('/me/player', {
+        method: 'PUT',
+        body: JSON.stringify({ device_ids: [deviceId], play: true })
+      });
+      // Small pause to let Spotify wake up the device
+      await new Promise(r => setTimeout(r, 800));
+    } catch(e) {}
+  }
+
   const deviceParam = deviceId ? '?device_id=' + deviceId : '';
-  
+
   try {
     await spotifyFetch('/me/player/play' + deviceParam, {
       method: 'PUT',
