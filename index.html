@@ -974,19 +974,7 @@ function setActiveStation(idx) {
   document.getElementById('center-number').textContent = stationName.slice(0, 8);
   document.getElementById('center-label').textContent = '▶';
 
-  // Preview after 1.5s
-  if (stations[idx]) {
-    previewTimer = setTimeout(() => {
-      if (activeIdx === idx && stations[idx]) {
-        node.classList.add('previewing');
-        const ring = document.getElementById(`preview-ring-${idx}`);
-        ring.style.opacity = '1';
-        ring.style.transform = 'scale(1.1)';
-        // Start playing as preview
-        playStation(idx, true);
-      }
-    }, 1500);
-  }
+  // No preview — play only on release
 }
 
 function setPlayingStation(idx) {
@@ -1039,11 +1027,7 @@ function handleEnd(clientX, clientY) {
 
   const nearest = getNearestStation(clientX, clientY);
   if (nearest >= 0 && stations[nearest]) {
-    // Clear preview ring
-    const ring = document.getElementById(`preview-ring-${nearest}`);
-    if (ring) { ring.style.opacity = '0'; ring.style.transform = 'scale(0.9)'; }
-    const node = document.getElementById(`station-${nearest}`);
-    if (node) node.classList.remove('previewing');
+
 
     playStation(nearest);
   }
