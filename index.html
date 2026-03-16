@@ -779,41 +779,6 @@ async function spotifyFetch(path, options = {}) {
   return res.json();
 }
 
-async function playPlaylist(uri) {
-  const randomOffset = Math.floor(Math.random() * 10);
-
-  // Get fresh device list
-  await getActiveDevice();
-
-  // If we have a device, transfer playback to wake it up
-  if (deviceId) {
-    try {
-      await spotifyFetch('/me/player', {
-        method: 'PUT',
-        body: JSON.stringify({ device_ids: [deviceId], play: true })
-      });
-      // Small pause to let Spotify wake up the device
-      await new Promise(r => setTimeout(r, 800));
-    } catch(e) {}
-  }
-
-  const deviceParam = deviceId ? '?device_id=' + deviceId : '';
-
-  try {
-    await spotifyFetch('/me/player/play' + deviceParam, {
-      method: 'PUT',
-      body: JSON.stringify({ context_uri: uri, offset: { position: randomOffset }, position_ms: 0 })
-    });
-  } catch(e) {
-    // Fallback to track 0
-    try {
-      await spotifyFetch('/me/player/play' + deviceParam, {
-        method: 'PUT',
-        body: JSON.stringify({ context_uri: uri, offset: { position: 0 }, position_ms: 0 })
-      });
-    } catch(e2) {}
-  }
-}
 
 async function fetchUserPlaylists() {
   try {
@@ -862,18 +827,22 @@ async function getActiveDevice() {
   try {
     const data = await spotifyFetch('/me/player/devices');
     if (data && data.devices && data.devices.length > 0) {
-      // Prefer phone/mobile device, fallback to first active
-      const mobile = data.devices.find(d => d.type === 'Smartphone');
-      const active = data.devices.find(d => d.is_active);
-      const chosen = active || mobile || data.devices[0];
-      deviceId = chosen.id;
-      isPlaying = chosen.is_active && !chosen.is_restricted;
-      document.getElementById('play-pause-btn').textContent = isPlaying ? '⏸' : '▶';
+      const phone = data.devices.find(d => d.type.toLowerCase() === 'smartphone');
+      const target = phone || data.devices[0];
+      deviceId = target.id;
+      if (!target.is_active) {
+        await spotifyFetch('/me/player', {
+          method: 'PUT',
+          body: JSON.stringify({ device_ids: [deviceId], play: false })
+        });
+        await new Promise(r => setTimeout(r, 500));
+      }
+      return deviceId;
     }
   } catch(e) {
-    // No device found — that's OK, we'll try when playing
-    console.log('No device yet:', e.message);
+    console.error('Device sync failed', e);
   }
+  return null;
 }
 
 // ════════════════════════════════════════════════
@@ -999,21 +968,36 @@ function setPlayingStation(idx) {
 
 async function playStation(idx, isPreview = false) {
   if (!stations[idx]) return;
+  const uri = stations[idx].uri;
   try {
-    // Get fresh device if needed
-    if (!deviceId) await getActiveDevice();
-    const uri = stations[idx].uri;
-    const isShow = uri.startsWith('spotify:show');
-    // Enable shuffle first (not for podcasts)
-    if (!isShow) {
-      try { await spotifyFetch('/me/player/shuffle?state=true' + (deviceId ? '&device_id=' + deviceId : ''), { method: 'PUT' }); } catch(e) {}
+    const id = await getActiveDevice();
+    if (!id) {
+      showError('Open Spotify app first');
+      return;
     }
-    await playPlaylist(uri);
-    if (!isPreview) setPlayingStation(idx);
-    isPlaying = true;
-    document.getElementById('play-pause-btn').textContent = '⏸';
-    document.getElementById('hint').style.opacity = '0';
+    const isShow = uri.startsWith('spotify:show');
+    if (!isShow) {
+      try { await spotifyFetch('/me/player/shuffle?state=true', { method: 'PUT' }); } catch(e) {}
+    }
+    const deviceParam = '?device_id=' + id;
+    const randomOffset = Math.floor(Math.random() * 10);
+    try {
+      await spotifyFetch('/me/player/play' + deviceParam, {
+        method: 'PUT',
+        body: JSON.stringify({ context_uri: uri, offset: { position: randomOffset }, position_ms: 0 })
+      });
+    } catch(e) {
+      await new Promise(r => setTimeout(r, 500));
+      await spotifyFetch('/me/player/play' + deviceParam, {
+        method: 'PUT',
+        body: JSON.stringify({ context_uri: uri, offset: { position: 0 }, position_ms: 0 })
+      });
+    }
     if (!isPreview) {
+      setPlayingStation(idx);
+      isPlaying = true;
+      document.getElementById('play-pause-btn').textContent = '⏸';
+      document.getElementById('hint').style.opacity = '0';
       autoSkipIfSilent();
       const delay = isShow ? 3000 : 1500;
       setTimeout(fetchCurrentlyPlaying, delay);
@@ -1023,8 +1007,6 @@ async function playStation(idx, isPreview = false) {
   }
 }
 
-// Touch/mouse handling
-let touching = false;
 
 function handleMove(clientX, clientY) {
   if (!touching) return;
