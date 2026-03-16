@@ -1256,70 +1256,54 @@ function showError(msg) {
 // No SDK needed for mobile API approach
 
 async function init() {
-  // Nuclear option — if anything hangs for 6s, show auth screen
-  const nukeTimer = setTimeout(() => {
-    localStorage.removeItem('spotify_token');
-    localStorage.removeItem('spotify_refresh_token');
-    document.getElementById('loading-screen').style.display = 'none';
-    document.getElementById('auth-screen').style.display = 'flex';
-  }, 6000);
-  window._nukeTimer = nukeTimer;
-  // Check for auth callback
   const params = new URLSearchParams(window.location.search);
   const code = params.get('code');
 
   if (code) {
-    showScreen('loading-screen');
+    // Coming back from Spotify auth
     window.history.replaceState({}, '', window.location.pathname);
-    // Safety timeout — if exchange hangs, go to auth screen
-    const safetyTimer = setTimeout(() => {
-      localStorage.removeItem('spotify_token');
-      showScreen('auth-screen');
-    }, 8000);
+    showScreen('loading-screen');
     try {
-      const tokens = await exchangeCode(code);
-      clearTimeout(safetyTimer);
+      const res = await Promise.race([
+        fetch('https://accounts.spotify.com/api/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            grant_type: 'authorization_code',
+            code,
+            redirect_uri: REDIRECT_URI,
+            client_id: CLIENT_ID,
+            code_verifier: sessionStorage.getItem('pkce_verifier')
+          })
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000))
+      ]);
+      const tokens = await res.json();
       if (tokens.access_token) {
         accessToken = tokens.access_token;
         localStorage.setItem('spotify_token', accessToken);
+        if (tokens.refresh_token) localStorage.setItem('spotify_refresh_token', tokens.refresh_token);
         loadSDK();
       } else {
         showScreen('auth-screen');
       }
     } catch(e) {
-      clearTimeout(safetyTimer);
       showScreen('auth-screen');
     }
     return;
   }
 
-  // Check stored token — try refresh first, go straight to radio
+  // No auth code — check stored token
   const stored = localStorage.getItem('spotify_token');
-  const storedRefresh = localStorage.getItem('spotify_refresh_token');
-  if (stored || storedRefresh) {
-    showScreen('loading-screen');
-    try {
-      // Try to refresh the token silently
-      if (storedRefresh) {
-        const refreshed = await refreshAccessToken();
-        if (refreshed) { loadSDK(); return; }
-      }
-      // Fall back to stored token
-      if (stored) {
-        accessToken = stored;
-        loadSDK();
-        return;
-      }
-    } catch(e) {}
-    // If all fails, clear and show auth
-    localStorage.removeItem('spotify_token');
-    localStorage.removeItem('spotify_refresh_token');
-    showScreen('auth-screen');
+  if (stored) {
+    accessToken = stored;
+    loadSDK();
     return;
   }
 
   showScreen('auth-screen');
 }
+
 
 function logout() {
   localStorage.removeItem('spotify_token');
