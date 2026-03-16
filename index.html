@@ -1256,6 +1256,14 @@ function showError(msg) {
 // No SDK needed for mobile API approach
 
 async function init() {
+  // Nuclear option — if anything hangs for 6s, show auth screen
+  const nukeTimer = setTimeout(() => {
+    localStorage.removeItem('spotify_token');
+    localStorage.removeItem('spotify_refresh_token');
+    document.getElementById('loading-screen').style.display = 'none';
+    document.getElementById('auth-screen').style.display = 'flex';
+  }, 6000);
+  window._nukeTimer = nukeTimer;
   // Check for auth callback
   const params = new URLSearchParams(window.location.search);
   const code = params.get('code');
