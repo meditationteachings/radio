@@ -577,6 +577,9 @@
       padding: 12px 0 8px;
       position:relative; z-index:20;
     ">
+      <button class="ctrl-btn" id="prev-btn"
+        ontouchend="event.stopPropagation();event.preventDefault();prevTrack();"
+        onclick="prevTrack()">⏮</button>
       <button class="ctrl-btn" id="play-pause-btn"
         ontouchend="event.stopPropagation();event.preventDefault();togglePlayPause();"
         onclick="togglePlayPause()">▶</button>
@@ -942,9 +945,6 @@ function setActiveStation(idx) {
   activeIdx = idx;
   clearTimeout(previewTimer);
 
-  // Haptic tick as finger moves between stations
-  if (idx >= 0 && navigator.vibrate) navigator.vibrate(10);
-
   if (idx < 0) {
     document.getElementById('center-number').textContent = '—';
     return;
@@ -999,7 +999,6 @@ async function playStation(idx, isPreview = false) {
     if (!isPreview) {
       setPlayingStation(idx);
       isPlaying = true;
-      if (navigator.vibrate) navigator.vibrate([30, 50, 30]);
       document.getElementById('play-pause-btn').textContent = '⏸';
       document.getElementById('hint').style.opacity = '0';
       autoSkipIfSilent();
@@ -1084,6 +1083,13 @@ async function togglePlayPause() {
   } catch(e) {
     // silenced
   }
+}
+
+async function prevTrack() {
+  try {
+    await spotifyFetch('/me/player/previous', { method: 'POST' });
+    setTimeout(fetchCurrentlyPlaying, 800);
+  } catch(e) {}
 }
 
 async function nextTrack() {
