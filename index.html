@@ -630,7 +630,6 @@ const SCOPES = [
 let accessToken = null;
 let player = null;
 let deviceId = null;
-localStorage.removeItem('radio_stations');
 let stations = JSON.parse(localStorage.getItem('radio_stations') || 'null') || [
   { name: 'Favorites',   uri: 'spotify:playlist:7z9fIn3nbQ30xpWQnRgbaC', image: 'https://image-cdn-fa.spotifycdn.com/image/ab67706c0000da84e9313b5397707912bd1f0379' },
   { name: 'Wilmy',       uri: 'spotify:playlist:1sTHxWf7DzXzu94VnaVVvf', image: 'https://mosaic.scdn.co/640/ab67656300005f1f563ebb538d297875b10114b7ab67656300005f1f66aed32f8066a72781b3b12aab67656300005f1f91cccfa1ca37e9919fccb4e9ab67656300005f1fa4e1d436cde0d6426123d2f2' },
