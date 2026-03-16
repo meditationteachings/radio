@@ -644,7 +644,6 @@ let currentStationIdx = -1;
 let isPlaying = false;
 let previewTimer = null;
 let activeIdx = -1;
-let touching = false;
 let userPlaylists = [];
 let pickingSlot = -1;
 let currentTrackInfo = { name: '', artist: '', art: '' };
@@ -943,6 +942,9 @@ function setActiveStation(idx) {
   activeIdx = idx;
   clearTimeout(previewTimer);
 
+  // Haptic tick as finger moves between stations
+  if (idx >= 0 && navigator.vibrate) navigator.vibrate(10);
+
   if (idx < 0) {
     document.getElementById('center-number').textContent = '—';
     return;
@@ -997,6 +999,7 @@ async function playStation(idx, isPreview = false) {
     if (!isPreview) {
       setPlayingStation(idx);
       isPlaying = true;
+      if (navigator.vibrate) navigator.vibrate([30, 50, 30]);
       document.getElementById('play-pause-btn').textContent = '⏸';
       document.getElementById('hint').style.opacity = '0';
       autoSkipIfSilent();
