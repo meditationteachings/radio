@@ -683,34 +683,23 @@ async function startAuth() {
 
 async function exchangeCode(code) {
   const verifier = sessionStorage.getItem('pkce_verifier');
-  
-  // Add 10s timeout to token exchange
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10000);
-  
-  try {
-    const res = await fetch('https://accounts.spotify.com/api/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        grant_type: 'authorization_code',
-        code,
-        redirect_uri: REDIRECT_URI,
-        client_id: CLIENT_ID,
-        code_verifier: verifier
-      }),
-      signal: controller.signal
-    });
-    clearTimeout(timeout);
-    const data = await res.json();
-    if (data.refresh_token) {
-      localStorage.setItem('spotify_refresh_token', data.refresh_token);
-    }
-    return data;
-  } catch(e) {
-    clearTimeout(timeout);
-    throw new Error('Token exchange failed: ' + e.message);
+  const res = await fetch('https://accounts.spotify.com/api/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri: REDIRECT_URI,
+      client_id: CLIENT_ID,
+      code_verifier: verifier
+    })
+  });
+  const data = await res.json();
+  // Store refresh token for silent renewal
+  if (data.refresh_token) {
+    localStorage.setItem('spotify_refresh_token', data.refresh_token);
   }
+  return data;
 }
 
 async function refreshAccessToken() {
@@ -857,7 +846,7 @@ async function getActiveDevice() {
       const chosen = active || mobile || data.devices[0];
       deviceId = chosen.id;
       isPlaying = chosen.is_active && !chosen.is_restricted;
-      document.getElementById('play-icon').style.display = isPlaying ? 'none' : 'block'; document.getElementById('pause-icon').style.display = isPlaying ? 'block' : 'none';
+      document.getElementById('play-pause-btn').textContent = isPlaying ? '⏸' : '▶';
     }
   } catch(e) {
     // No device found — that's OK, we'll try when playing
@@ -1012,7 +1001,7 @@ async function playStation(idx, isPreview = false) {
     await playPlaylist(uri);
     if (!isPreview) setPlayingStation(idx);
     isPlaying = true;
-    document.getElementById('play-icon').style.display = 'none'; document.getElementById('pause-icon').style.display = 'block';
+    document.getElementById('play-pause-btn').textContent = '⏸';
     document.getElementById('hint').style.opacity = '0';
     if (!isPreview) {
       autoSkipIfSilent();
@@ -1094,11 +1083,11 @@ async function togglePlayPause() {
     if (playing) {
       await spotifyFetch('/me/player/pause', { method: 'PUT' });
       isPlaying = false;
-      document.getElementById('play-icon').style.display = 'block'; document.getElementById('pause-icon').style.display = 'none';
+      document.getElementById('play-pause-btn').textContent = '▶';
     } else {
       await spotifyFetch('/me/player/play', { method: 'PUT' });
       isPlaying = true;
-      document.getElementById('play-icon').style.display = 'none'; document.getElementById('pause-icon').style.display = 'block';
+      document.getElementById('play-pause-btn').textContent = '⏸';
     }
   } catch(e) {
     // silenced
@@ -1235,7 +1224,7 @@ function showScreen(id) {
 }
 
 function showRadio() {
-  document.getElementById('play-icon').style.display = 'block'; document.getElementById('pause-icon').style.display = 'none';
+  document.getElementById('play-pause-btn').textContent = '▶';
   showScreen('radio-screen');
   wheelNodes = buildWheel();
   setupTouchHandlers();
@@ -1256,14 +1245,6 @@ function showError(msg) {
 // No SDK needed for mobile API approach
 
 async function init() {
-  // Nuclear option — if anything hangs for 6s, show auth screen
-  const nukeTimer = setTimeout(() => {
-    localStorage.removeItem('spotify_token');
-    localStorage.removeItem('spotify_refresh_token');
-    document.getElementById('loading-screen').style.display = 'none';
-    document.getElementById('auth-screen').style.display = 'flex';
-  }, 6000);
-  window._nukeTimer = nukeTimer;
   // Check for auth callback
   const params = new URLSearchParams(window.location.search);
   const code = params.get('code');
@@ -1271,50 +1252,30 @@ async function init() {
   if (code) {
     showScreen('loading-screen');
     window.history.replaceState({}, '', window.location.pathname);
-    // Safety timeout — if exchange hangs, go to auth screen
-    const safetyTimer = setTimeout(() => {
-      localStorage.removeItem('spotify_token');
-      showScreen('auth-screen');
-    }, 8000);
     try {
       const tokens = await exchangeCode(code);
-      clearTimeout(safetyTimer);
       if (tokens.access_token) {
         accessToken = tokens.access_token;
         localStorage.setItem('spotify_token', accessToken);
+        // Load SDK
         loadSDK();
       } else {
+        showError('Auth failed');
         showScreen('auth-screen');
       }
     } catch(e) {
-      clearTimeout(safetyTimer);
+      showError('Auth error');
       showScreen('auth-screen');
     }
     return;
   }
 
-  // Check stored token — try refresh first, go straight to radio
+  // Check stored token
   const stored = localStorage.getItem('spotify_token');
-  const storedRefresh = localStorage.getItem('spotify_refresh_token');
-  if (stored || storedRefresh) {
+  if (stored) {
+    accessToken = stored;
     showScreen('loading-screen');
-    try {
-      // Try to refresh the token silently
-      if (storedRefresh) {
-        const refreshed = await refreshAccessToken();
-        if (refreshed) { loadSDK(); return; }
-      }
-      // Fall back to stored token
-      if (stored) {
-        accessToken = stored;
-        loadSDK();
-        return;
-      }
-    } catch(e) {}
-    // If all fails, clear and show auth
-    localStorage.removeItem('spotify_token');
-    localStorage.removeItem('spotify_refresh_token');
-    showScreen('auth-screen');
+    loadSDK();
     return;
   }
 
